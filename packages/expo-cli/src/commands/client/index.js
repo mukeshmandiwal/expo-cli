@@ -9,6 +9,7 @@ import { PLATFORMS } from '../build/constants';
 import { runAction, travelingFastlane } from '../build/ios/appleApi/fastlane';
 import selectDistributionCert from './selectDistributionCert';
 import selectPushKey from './selectPushKey';
+import selectAdhocProvisioningProfile from './selectAdhocProvisioningProfile';
 import generateBundleIdentifier from './generateBundleIdentifier';
 import { createClientBuildRequest, getExperienceName, isAllowedToBuild } from './clientBuildApi';
 import log from '../../log';
@@ -54,8 +55,20 @@ export default program => {
       };
       await appleApi.ensureAppExists(context);
 
+      const { devices } = await runAction(travelingFastlane.listDevices, [
+        context.appleId,
+        context.appleIdPassword,
+        context.team.id,
+      ]);
+      const udids = devices.map(device => device.deviceNumber);
+
       const distributionCert = await selectDistributionCert(context);
       const pushKey = await selectPushKey(context);
+      const provisioningProfile = await selectAdhocProvisioningProfile(
+        context,
+        udids,
+        distributionCert.distCertSerialNumber
+      );
 
       if (pushKey === null) {
         log(
@@ -64,7 +77,7 @@ export default program => {
       }
 
       // if user is logged in, then we should update credentials
-      const credentialsList = [distributionCert, pushKey].filter(i => i);
+      const credentialsList = [distributionCert, pushKey, provisioningProfile].filter(i => i);
       if (user) {
         // store all the credentials that we mark for update
         const updateCredentialsFn = async listOfCredentials => {
@@ -99,12 +112,6 @@ export default program => {
         }));
       }
 
-      const { devices } = await runAction(travelingFastlane.listDevices, [
-        context.appleId,
-        context.appleIdPassword,
-        context.team.id,
-      ]);
-      const udids = devices.map(device => device.deviceNumber);
       log.newLine();
 
       let addUdid;
@@ -135,6 +142,7 @@ export default program => {
         user,
         context,
         distributionCert,
+        provisioningProfile,
         pushKey,
         udids,
         addUdid,
