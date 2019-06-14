@@ -10,10 +10,7 @@ import { tagForUpdate } from './tagger';
 
 import { choosePreferredCreds } from './selectUtils';
 
-// XXX: workaround for https://github.com/babel/babel/issues/6262
-export default selectPushKey;
-
-async function selectPushKey(context, options = {}) {
+export default async function selectPushKey(context, options = {}) {
   const pushKeys = context.username ? await chooseUnrevokedPushKey(context) : [];
   const choices = [...pushKeys];
 
@@ -30,17 +27,17 @@ async function selectPushKey(context, options = {}) {
   choices.push({ name: '[Upload an existing key]', value: 'UPLOAD' });
   choices.push({ name: '[Skip. This will disable push notifications.]', value: 'SKIP' });
 
-  let { pushKey } = await prompt({
+  let { promptValue } = await prompt({
     type: 'list',
-    name: 'pushKey',
+    name: 'promptValue',
     message: 'Select an authentication token signing key to use for push notifications:',
     pageSize: Infinity,
     choices,
   });
-  if (pushKey === 'GENERATE') {
-    pushKey = await generatePushKey(context);
-  } else if (pushKey === 'UPLOAD') {
-    pushKey = (await promptForCredentials(context, ['pushKey']))[0].pushKey;
+  if (promptValue === 'GENERATE') {
+    return await generatePushKey(context);
+  } else if (promptValue === 'UPLOAD') {
+    const pushKey = (await promptForCredentials(context, ['pushKey']))[0].pushKey;
     const isValid = await validateUploadedPushKey(context, pushKey);
     if (!isValid) {
       return await selectPushKey(context, { disableAutoSelectExisting: true });
@@ -48,10 +45,12 @@ async function selectPushKey(context, options = {}) {
 
     // tag for updating to Expo servers
     tagForUpdate(pushKey);
-  } else if (pushKey === 'SKIP') {
-    pushKey = null;
+    return pushKey;
+  } else if (promptValue === 'SKIP') {
+    return null;
+  } else {
+    return promptValue; // this should be an unrevoked key from the Expo servers
   }
-  return pushKey;
 }
 
 async function validateUploadedPushKey(context, pushKey) {

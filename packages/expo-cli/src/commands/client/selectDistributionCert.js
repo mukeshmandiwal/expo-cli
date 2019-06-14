@@ -10,10 +10,7 @@ import { tagForUpdate } from './tagger';
 
 import { choosePreferredCreds } from './selectUtils';
 
-// XXX: workaround for https://github.com/babel/babel/issues/6262
-export default selectDistributionCert;
-
-async function selectDistributionCert(context, options = {}) {
+export default async function selectDistributionCert(context, options = {}) {
   const certificates = context.username ? await chooseUnrevokedDistributionCert(context) : [];
   const choices = [...certificates];
 
@@ -29,18 +26,18 @@ async function selectDistributionCert(context, options = {}) {
   }
   choices.push({ name: '[Upload an existing certificate]', value: 'UPLOAD' });
 
-  let { distributionCert } = await prompt({
+  const { promptValue } = await prompt({
     type: 'list',
-    name: 'distributionCert',
+    name: 'promptValue',
     message: 'Select an iOS distribution certificate to use for code signing:',
     pageSize: Infinity,
     choices,
   });
-  if (distributionCert === 'GENERATE') {
-    distributionCert = await generateDistributionCert(context);
-  } else if (distributionCert === 'UPLOAD') {
+  if (promptValue === 'GENERATE') {
+    return await generateDistributionCert(context);
+  } else if (promptValue === 'UPLOAD') {
     const userProvidedCredentials = await promptForCredentials(context, ['distributionCert']);
-    distributionCert = userProvidedCredentials[0].distributionCert;
+    const distributionCert = userProvidedCredentials[0].distributionCert;
     distributionCert.distCertSerialNumber = userProvidedCredentials[1].distCertSerialNumber;
     const isValid = await validateUploadedCertificate(context, distributionCert);
     if (!isValid) {
@@ -49,8 +46,10 @@ async function selectDistributionCert(context, options = {}) {
 
     // tag for updating to Expo servers
     tagForUpdate(distributionCert);
+    return distributionCert;
+  } else {
+    return promptValue; // this should be an unrevoked cert from the Expo servers
   }
-  return distributionCert;
 }
 
 async function validateUploadedCertificate(context, distributionCert) {
